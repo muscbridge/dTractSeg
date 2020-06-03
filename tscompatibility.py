@@ -43,6 +43,8 @@ def nan_to_zero(input, output, docker=None):
         Path to input volume
     output : str
         Path to output volume
+    docker : str, optional
+        Name of docker container to run
 
     Returns
     -------
@@ -52,6 +54,9 @@ def nan_to_zero(input, output, docker=None):
         raise OSError('Input file {} not found'.format(input))
     if not op.exists(op.dirname(output)):
         raise OSError('Directory {} for writing output file does not exist'.format(op.dirname(output)))
+    if docker is not None:
+        if not isinstance(docker, str):
+            raise Exception('Please provide name of Docker container as a string')
     arg = [
         'fslmaths',
         input,
@@ -65,7 +70,7 @@ def nan_to_zero(input, output, docker=None):
     if p.returncode != 0: 
         print('Error in converting NaNs to zeros: \{}'.format(error))
 
-def zeroNegative(input, output):
+def zeroNegative(input, output, docker=None):
     """
     Thresholds all nubers below zero to zero
 
@@ -75,6 +80,8 @@ def zeroNegative(input, output):
         Path to input volume
     output : str
         Path to output volume
+    docker : str, optional
+        Name of docker container to run
 
     Returns
     -------
@@ -84,6 +91,9 @@ def zeroNegative(input, output):
         raise OSError('Input file {} not found'.format(input))
     if not op.exists(op.dirname(output)):
         raise OSError('Directory {} for writing output file does not exist'.format(op.dirname(output)))
+    if docker is not None:
+        if not isinstance(docker, str):
+            raise Exception('Please provide name of Docker container as a string')
     arg = [
         'fslmaths',
         input,
@@ -668,7 +678,7 @@ def createAffineFA(dwi, bval, bvec, omat, template, mask=None, docker=None):
     os.remove(FA)
     os.remove(FA_)
     
-def runtractseg(input, output, docker=None):
+def runtractseg(input, output, template, docker=None):
     """
     Exevutes the entire TractSeg pipeline from start to finish
     
@@ -693,7 +703,8 @@ def runtractseg(input, output, docker=None):
 
         
     path_fa = op.join(input, 'metrics', 'fa.nii')
-    path_fa_nan = path_mni_fa = op.join(output, 'FA_NO_NAN.nii.gz')
+    path_fa_nan = op.join(output, 'FA_NO_NAN.nii.gz')
+    path_fa_zero = op.join(output, 'FA_NO_NEG.nii.gz')
     path_dwi = op.join(input, 'dwi_preprocessed.nii')
     path_bvec = op.join(input, 'dwi_preprocessed.bvec')
     path_bval = op.join(input, 'dwi_preprocessed.bval')
@@ -712,7 +723,7 @@ def runtractseg(input, output, docker=None):
         print('Mask: {}'.format(path_mask))
     print('---------------------------------')
     print('')
-    path_mni_template = '/Users/dataprocessing/Documents/IAM/TractSeg/MNI_FA_template.nii.gz'
+    path_mni_template = template
     path_mni_fa = op.join(output, 'FA_MNI.nii.gz')
     path_mni_dwi = op.join(output, 'DWI_MNI.nii.gz')
     path_mni_dwi_mif = op.join(output, 'DWI_MNI.mif')
@@ -726,7 +737,7 @@ def runtractseg(input, output, docker=None):
 
     print('Removing NaNs from scalar image')
     nan_to_zero(path_fa, path_fa_nan)
-    
+
     print('Computing transformation affine matrix')
     createAffineFA(
         dwi = path_dwi,
@@ -746,7 +757,16 @@ def runtractseg(input, output, docker=None):
         out=path_mni_fa,
         docker=docker
     )
+    # Remove negative values from FA
+    print('Removing negative values from scalar image')
+    zeroNegative(path_mni_fa, path_fa_zero)
+
+    # Remove obsolete files
     os.remove(path_fa_nan)
+    os.remove(path_mni_fa)
+
+    # Rename zero-corrected file
+    os.rename(path_fa_zero, path_mni_fa)
     
     print('Transform DWI into MNI space...')
     applyTransform(

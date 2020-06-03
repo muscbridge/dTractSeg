@@ -80,7 +80,7 @@ recommends registering to their ``MNI_FA_template.nii.gz`` template map.
 
 ```
 print('Computing transformation affine matrix')
-createAffineFA(
+ts.createAffineFA(
     dwi = '/Users/dataprocessing/Documents/IAM/TractSeg_Subs/IAM_1158/dwi_preprocessed.nii',
     bval='/Users/dataprocessing/Documents/IAM/TractSeg_Subs/IAM_1158/dwi_preprocessed.bval',
     bvec='/Users/dataprocessing/Documents/IAM/TractSeg_Subs/IAM_1158/dwi_preprocessed.bvec',
@@ -100,18 +100,32 @@ Using the affine transformation matrix file, transform the DWI, scalar map, and 
 ```
 # Transform FA without NaNs
 print('Transform FA into MNI space...')
-applyTransform(
+ts.applyTransform(
     moving='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_NO_NAN.nii.gz',
     template='/Users/dataprocessing/Documents/IAM/TractSeg/MNI_FA_template.nii.gz',
     omat='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_2_MNI.mat',
     out='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_MNI.nii.gz'
 )
-# Remove FA_NO_NAN.nii.gz because it is not needed anymore
-os.remove(path_fa_nan)
+# Remove negative values from FA
+print('Removing negative values from scalar image')
+ts.zeroNegative(
+    input='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_MNI.nii.gz',
+    output=''/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_NO_NEG.nii.gz'
+)
+
+# Remove obsolete files
+os.remove('/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_NO_NAN.nii.gz')
+os.remove('/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_MNI.nii.gz')
+
+# Rename zero-corrected file to FA_MNI.nii.gz
+os.rename(
+    '/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_NO_NEG.nii.gz',
+    '/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_MNI.nii.gz'
+)
 
 # Transform DWI
 print('Transform DWI into MNI space...')
-applyTransform(
+ts.applyTransform(
     moving=/Users/dataprocessing/Documents/IAM/TractSeg_Subs/IAM_1158/dwi_preprocessed.nii,
     template='/Users/dataprocessing/Documents/IAM/TractSeg/MNI_FA_template.nii.gz',
     omat='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_2_MNI.mat',
@@ -120,7 +134,7 @@ applyTransform(
 
 # Transform brain mask
 print('Transform brain mask into MNI space...')
-applyTransform(
+ts.applyTransform(
     moving=/Users/dataprocessing/Documents/IAM/TractSeg_Subs/IAM_1158/brain_mask.nii,
     template='/Users/dataprocessing/Documents/IAM/TractSeg/MNI_FA_template.nii.gz',
     omat='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_2_MNI.mat',
@@ -133,6 +147,10 @@ applyTransform(
 Transforming the he brain mask requires ``'nearestneighbour'`` interpolation to
 retain its binary composition.
 
+**Note**: Registering the scalar map FA to MNI space may produce values less than zero
+because of interpolation. Use the function ``ts.zeroNegative`` to remove negative values
+prior to further processing.
+
 #### Rotate BVEC and copy BVAL:
 
 The gradient vectors (BVECs) have to be rotated accordingly to represent the transformed
@@ -141,7 +159,7 @@ DWI. BVALs also need to be copied over and both these steps can be performed wit
 ```
 # Rotate BVEC
 print('Rotating BVECs into MNI space...')
-rotatebvec(
+ts.rotatebvec(
     bvec='/Users/dataprocessing/Documents/IAM/TractSeg_Subs/IAM_1158/dwi_preprocessed.bvec',
     omat='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_2_MNI.mat',
     out='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/DWI_MNI.bvec',
@@ -161,7 +179,7 @@ Begin creating segmentation bundles using TractSeg wrappers with the command:
 
 ```
 print('Creating segmentation bundles...')
-peaks_dir, bundle_dir = segBundle(
+ts.peaks_dir, bundle_dir = segBundle(
     dwi='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/DWI_MNI.nii.gz',
     bval=/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/DWI_MNI.bval,
     bvec='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/DWI_MNI.bvec',
@@ -180,7 +198,7 @@ Next, create endings segmentation with:
 
 ```
 print('Creating enging segmentation bundles...')
-end_dir = segStartEnd(
+end_dir = ts.segStartEnd(
     peaks=peaks_dir,
     out='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158',
 )
@@ -194,7 +212,7 @@ Once ending segmentation is done, perform TOM with:
 
 ```
 print('Creating TOMs...')
-tom_dir = segCreateTOM(
+tom_dir = ts.segCreateTOM(
     peaks=peaks_dir,
     out='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158'
 )
@@ -208,7 +226,7 @@ Next, create TOM tractograms with:
 
 ```
 print('Creating TOM tractograms...')
-tracking_dir = segTracking(
+tracking_dir = ts.segTracking(
     peaks=peaks_dir,
     out='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158',
     nr_fibers=5000
@@ -223,7 +241,7 @@ Finally, run tractometry on MNI-space scalar (``FA.nii.gz)`` with:
 
 ```
 print('Running tracotometry...')
-segTractometry(
+ts.segTractometry(
     metric='/Users/dataprocessing/Documents/IAM/TractSeg/IAM_1158/FA_MNI.nii.gz',
     tracking_dir=tracking_dir,
     end_dir=end_dir,
