@@ -5,6 +5,14 @@
 Functions to make PyDesigner and TractSeg compatible
 """
 
+import os
+import os.path as op
+import shutil
+import glob
+import numpy as np
+import subprocess
+import nibabel as nib
+
 def get_image_spacing(img_path):
     """
     Fetches images spacing
@@ -24,6 +32,39 @@ def get_image_spacing(img_path):
     img = nib.load(img_path)
     affine = img.affine
     return str(abs(round(affine[0, 0], 2)))
+
+def nan_to_zero(input, output, docker=None):
+    """
+    Convert all NaNs in input volume to zeros
+
+    Parameters
+    ----------
+    input : str
+        Path to input volume
+    output : str
+        Path to output volume
+
+    Returns
+    -------
+    None; writes out file
+    """
+    if not op.exists(input):
+        raise OSError('Input file {} not found'.format(input))
+    if not op.exists(op.dirname(output)):
+        raise OSError('Directory {} for writing output file does not exist'.format(op.dirname(output)))
+    arg = [
+        'fslmaths',
+        input,
+        '-nan',
+        output
+    ]
+    if docker is not None:
+        arg.insert(['docker', 'run', '-it', '--rm', docker])
+    p = subprocess.Popen(arg, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, error = p.communicate()
+    if p.returncode != 0: 
+        print('Converting NaNs to zeros: \{}'.format(error))
+
 
 def createTransform(moving, template, out, omat, docker=None):
     """
@@ -283,7 +324,7 @@ def segBundle(dwi, bval, bvec, out, mask=None, docker=None):
     if not op.exists(bvec):
         raise OSError('BVEC file {} not found'.format(bvec))
     if not op.exists(out):
-        raise OSError('Output path {} not found'.format(outdir))
+        raise OSError('Output path {} not found'.format(out))
     if mask is not None:
         if not op.exists(mask):
             raise OSError('Brain mask file {} not found'.format(mask))
@@ -528,6 +569,73 @@ def segTractometry(metric, tracking_dir, end_dir, out, docker=None):
         print('Unable to run segTractometry. '
               'See above for errors')
 
+def createAffineFA(dwi, bval, bvec, omat, template, mask=None, docker=None):
+    """
+    Creates 4 x 4 from TractSeg's FA map for registration of custom scalars 
+    
+    Parameters
+    ----------
+    dwi : str
+        Path to DWI
+    bval : str
+        Path to .bval accompanying DWI
+    bvec : str
+        Path to .bvec accompanying DWI
+    omat : path to affine in .mat extension
+    mask : str, optional
+        Path to brain mask
+    docker : str, optional
+        Name of docker container to run
+
+    Returns
+    -------
+    None; writes out files
+    """
+    if not op.exists(dwi):
+        raise OSError('DWI file {} not found'.format(dwi))
+    if not op.exists(template):
+        raise OSError('Template file {} not found'.format(template))
+    if not op.exists(bval):
+        raise OSError('BVAL file {} not found'.format(bval))
+    if not op.exists(bvec):
+        raise OSError('BVEC file {} not found'.format(bvec))
+    if not op.exists(op.dirname(omat)):
+        raise OSError('Directory {} for writing save file does not exist'.format(op.dirname(omat)))
+    if op.splitext(omat)[-1] != '.mat':
+        raise OSError('Affine matrix {} needs to be have .mat extension'.format(omat))
+    if mask is not None:
+        if not op.exists(mask):
+            raise OSError('Brain mask file {} not found'.format(mask))
+    if docker is not None:
+        if not isinstance(docker, str):
+            raise Exception('Please provide name of Docker container as a string')
+    FA = op.join(op.dirname(omat), 'FA.nii.gz')
+    FA_ = op.join(op.dirname(omat), 'FA_MNI.nii.gz')
+    arg = [
+        'calc_FA',
+        '-i', dwi,
+        '--bvals', bval,
+        '--bvecs', bvec,
+        '-o', FA
+    ]
+    if mask is not None:
+        arg.extend(['--brain_mask', mask])
+    if docker is not None:
+        arg.insert(['docker', 'run', '-it', '--rm', docker])
+    p = subprocess.run(arg)
+    if p.returncode != 0: 
+        print('Unable to run segTractometry. '
+              'See above for errors')
+    createTransform(
+        moving=FA,
+        template=template,
+        out=FA_,
+        omat=omat,
+        docker=docker
+    )
+    os.remove(FA)
+    os.remove(FA_)
+    
 def runtractseg(input, output, docker=None):
     """
     Exevutes the entire TractSeg pipeline from start to finish
@@ -553,6 +661,7 @@ def runtractseg(input, output, docker=None):
 
         
     path_fa = op.join(input, 'metrics', 'fa.nii')
+    path_fa_nan = path_mni_fa = op.join(output, 'FA_NO_NAN.nii.gz')
     path_dwi = op.join(input, 'dwi_preprocessed.nii')
     path_bvec = op.join(input, 'dwi_preprocessed.bvec')
     path_bval = op.join(input, 'dwi_preprocessed.bval')
@@ -582,15 +691,30 @@ def runtractseg(input, output, docker=None):
     
     print('STAGE 1: Image registration into MNI space')
     print('')
+
+    print('Removing NaNs from scalar image')
+    nan_to_zero(path_fa, path_fa_nan)
     
-    print('Transform FA into MNI space...')
-    createTransform(
-        moving=path_fa,
-        template=path_mni_template,
-        out=path_mni_fa,
+    print('Computing transformation affine matrix')
+    createAffineFA(
+        dwi = path_dwi,
+        bval=path_bval,
+        bvec=path_bvec,
         omat=path_mni_omat,
+        template=path_mni_template,
+        mask=path_mask,
         docker=docker
     )
+
+    print('Transform FA into MNI space...')
+    applyTransform(
+        moving=path_fa_nan,
+        template=path_mni_template,
+        omat=path_mni_omat,
+        out=path_mni_fa,
+        docker=docker
+    )
+    os.remove(path_fa_nan)
     
     print('Transform DWI into MNI space...')
     applyTransform(
