@@ -63,7 +63,39 @@ def nan_to_zero(input, output, docker=None):
     p = subprocess.Popen(arg, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, error = p.communicate()
     if p.returncode != 0: 
-        print('Converting NaNs to zeros: \{}'.format(error))
+        print('Error in converting NaNs to zeros: \{}'.format(error))
+
+def zeroNegative(input, output):
+    """
+    Thresholds all nubers below zero to zero
+
+    Parameters
+    ----------
+    input : str
+        Path to input volume
+    output : str
+        Path to output volume
+
+    Returns
+    -------
+    None; writes out file
+    """
+    if not op.exists(input):
+        raise OSError('Input file {} not found'.format(input))
+    if not op.exists(op.dirname(output)):
+        raise OSError('Directory {} for writing output file does not exist'.format(op.dirname(output)))
+    arg = [
+        'fslmaths',
+        input,
+        '-thr', '0',
+        output
+    ]
+    if docker is not None:
+        arg.insert(['docker', 'run', '-it', '--rm', docker])
+    p = subprocess.Popen(arg, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, error = p.communicate()
+    if p.returncode != 0: 
+        print('Error in removing negative values: \{}'.format(error))
 
 
 def createTransform(moving, template, out, omat, docker=None):
