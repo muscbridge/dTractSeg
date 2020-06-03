@@ -1,0 +1,3 @@
+[submodule "TractSeg"]
+	path = TractSeg
+	url = https://github.com/MIC-DKFZ/TractSeg.git
