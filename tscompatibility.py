@@ -735,7 +735,7 @@ def runtractseg(input, output, template, docker=None):
     path_mni_dwi_mif = op.join(output, 'DWI_MNI.mif')
     path_mni_bvec = op.join(output, 'DWI_MNI.bvec')
     path_mni_bval = op.join(output, 'DWI_MNI.bval')
-    path_mni_mask = op.join(output, 'nodif_brain_mask_MNI.nii.gz')
+    path_mni_mask = op.join(output, 'nodif_brain_mask.nii.gz')
     path_mni_omat = op.join(output, 'FA_2_MNI.mat')
     
     print('STAGE 1: Image registration into MNI space')
@@ -764,7 +764,7 @@ def runtractseg(input, output, template, docker=None):
         docker=docker
     )
     # Remove negative values from FA
-    print('Removing negative values from scalar image')
+    print('Thresholding scalar image')
     threshold(path_mni_fa, path_fa_zero, [0, 1])
 
     # Remove obsolete files
