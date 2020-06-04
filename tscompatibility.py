@@ -93,6 +93,8 @@ def threshold(input, output, range, docker=None):
         raise OSError('Input file {} not found'.format(input))
     if not op.exists(op.dirname(output)):
         raise OSError('Directory {} for writing output file does not exist'.format(op.dirname(output)))
+    if len(range) != 2:
+        raise Exception('Range needs to be a list of two elements containing lower and upper bounds')
     if docker is not None:
         if not isinstance(docker, str):
             raise Exception('Please provide name of Docker container as a string')
