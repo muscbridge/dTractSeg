@@ -70,7 +70,7 @@ def nan_to_zero(input, output, docker=None):
     if p.returncode != 0: 
         print('Error in converting NaNs to zeros: \{}'.format(error))
 
-def zeroNegative(input, output, docker=None):
+def threshold(input, output, range, docker=None):
     """
     Thresholds all nubers below zero to zero
 
@@ -80,6 +80,8 @@ def zeroNegative(input, output, docker=None):
         Path to input volume
     output : str
         Path to output volume
+    range : list of int
+        Lower and upper bound to threshold
     docker : str, optional
         Name of docker container to run
 
@@ -97,7 +99,8 @@ def zeroNegative(input, output, docker=None):
     arg = [
         'fslmaths',
         input,
-        '-thr', '0',
+        '-thr', str(range[0]),
+        '-uthr', str(range[1]),
         output
     ]
     if docker is not None:
@@ -605,7 +608,6 @@ def segTractometry(metric, tracking_dir, end_dir, out, docker=None):
     ]
     if docker is not None:
         arg.insert(['docker', 'run', '-it', '--rm', docker])
-    print(' '.join(arg))
     p = subprocess.run(arg)
     if p.returncode != 0: 
         print('Unable to run segTractometry. '
@@ -688,6 +690,8 @@ def runtractseg(input, output, template, docker=None):
         Path to subject input folder
     output : str
         Path to subject output folder
+    template : str
+        Path to MNI template
     docker : str
         Name of Docker container to run
         
@@ -759,7 +763,7 @@ def runtractseg(input, output, template, docker=None):
     )
     # Remove negative values from FA
     print('Removing negative values from scalar image')
-    zeroNegative(path_mni_fa, path_fa_zero)
+    threshold(path_mni_fa, path_fa_zero, [0, 1])
 
     # Remove obsolete files
     os.remove(path_fa_nan)
@@ -841,7 +845,7 @@ def runtractseg(input, output, template, docker=None):
         metric=path_mni_fa,
         tracking_dir=tracking_dir,
         end_dir=end_dir,
-        out=op.join(output, 'Tractometry.csv'),
+        out=op.join(output, 'Tractometry_FA.csv'),
         docker=docker
     )
     
