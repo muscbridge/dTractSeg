@@ -254,7 +254,7 @@ def applyTransform(moving, template, omat, out, interp='spline', docker=None):
         '-init', omat,
         '-dof', '6',
         '-interp', interp,
-        '-applyisoxfm', dwi_spacing
+        '-applyxfm'
     ]
     if docker is not None:
         arg.insert(['docker', 'run', '-it', '--rm', docker])
