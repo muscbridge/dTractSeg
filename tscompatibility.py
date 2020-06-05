@@ -682,7 +682,7 @@ def createAffineFA(dwi, bval, bvec, omat, template, mask=None, docker=None):
     os.remove(FA)
     os.remove(FA_)
     
-def runtractseg(input, output, template, docker=None):
+def runtractseg(input, output, template, metric='fa', docker=None):
     """
     Exevutes the entire TractSeg pipeline from start to finish
     
@@ -694,6 +694,7 @@ def runtractseg(input, output, template, docker=None):
         Path to subject output folder
     template : str
         Path to MNI template
+    metric : str, {fa, ad, rd, md, ak, rk, mk, kfa, 'mkt}, optional
     docker : str
         Name of Docker container to run
         
@@ -702,23 +703,32 @@ def runtractseg(input, output, template, docker=None):
     None
         Writes out files
     """
+    if not isinstance(metric, str):
+        raise Exception('Please specify metric as a string')
     subID = op.basename(input)
     print('Processing {}'.format(subID))
     if not op.isdir(output):
         os.makedirs(output, exist_ok=True)
+    
+    if any(metric==x for x in ['fa', 'kfa']):
+        thr = [0, 1]
+    elif any(metric==x for x in ['ad', 'rd', 'md']):
+        thr = [0, 3]
+    elif any(metric==x for x in ['ak', 'rk', 'mk', 'mkt']):
+        thr = [0, 2]
 
         
-    path_fa = op.join(input, 'metrics', 'fa.nii')
-    path_fa_nan = op.join(output, 'FA_NO_NAN.nii.gz')
-    path_fa_zero = op.join(output, 'FA_NO_NEG.nii.gz')
+    path_metric = op.join(input, 'metrics', metric + '.nii')
+    path_metric_nan = op.join(output, metric + '_NO_NAN.nii.gz')
+    path_metric_thr = op.join(output, metric + '_NO_NAN_THR.nii.gz')
     path_dwi = op.join(input, 'dwi_preprocessed.nii')
     path_bvec = op.join(input, 'dwi_preprocessed.bvec')
     path_bval = op.join(input, 'dwi_preprocessed.bval')
     path_mask = op.join(input, 'brain_mask.nii')
     print('')
     print('----- Files being processed -----')
-    if op.exists(path_fa):
-        print('FA: {}'.format(path_fa))
+    if op.exists(path_metric):
+        print('FA: {}'.format(path_metric))
     if op.exists(path_dwi):
         print('DWI: {}'.format(path_dwi))
     if op.exists(path_bvec):
@@ -730,9 +740,8 @@ def runtractseg(input, output, template, docker=None):
     print('---------------------------------')
     print('')
     path_mni_template = template
-    path_mni_fa = op.join(output, 'FA_MNI.nii.gz')
+    path_mni_metric = op.join(output, metric + '_MNI.nii.gz')
     path_mni_dwi = op.join(output, 'DWI_MNI.nii.gz')
-    path_mni_dwi_mif = op.join(output, 'DWI_MNI.mif')
     path_mni_bvec = op.join(output, 'DWI_MNI.bvec')
     path_mni_bval = op.join(output, 'DWI_MNI.bval')
     path_mni_mask = op.join(output, 'nodif_brain_mask.nii.gz')
@@ -742,7 +751,8 @@ def runtractseg(input, output, template, docker=None):
     print('')
 
     print('Removing NaNs from scalar image')
-    nan_to_zero(path_fa, path_fa_nan)
+    nan_to_zero(path_metric, path_metric_nan)
+    threshold(path_metric_nan, path_metric_thr, thr)
 
     print('Computing transformation affine matrix')
     createAffineFA(
@@ -757,22 +767,23 @@ def runtractseg(input, output, template, docker=None):
 
     print('Transform FA into MNI space...')
     applyTransform(
-        moving=path_fa_nan,
+        moving=path_metric_thr,
         template=path_mni_template,
         omat=path_mni_omat,
-        out=path_mni_fa,
+        out=path_mni_metric,
         docker=docker
     )
-    # Remove negative values from FA
+    os.remove(path_metric_thr)
+    # Remove negative values from metric
     print('Thresholding scalar image')
-    threshold(path_mni_fa, path_fa_zero, [0, 1])
+    threshold(path_mni_metric, path_metric_thr, thr)
 
     # Remove obsolete files
-    os.remove(path_fa_nan)
-    os.remove(path_mni_fa)
+    os.remove(path_metric_nan)
+    os.remove(path_mni_metric)
 
     # Rename zero-corrected file
-    os.rename(path_fa_zero, path_mni_fa)
+    os.rename(path_metric_thr, path_mni_metric)
     
     print('Transform DWI into MNI space...')
     applyTransform(
@@ -820,7 +831,7 @@ def runtractseg(input, output, template, docker=None):
         docker=docker
     )
     
-    print('Creating enging segmentation bundles...')
+    print('Creating ending segmentation bundles...')
     end_dir = segStartEnd(
         peaks=peaks_dir,
         out=output,
@@ -844,7 +855,7 @@ def runtractseg(input, output, template, docker=None):
     
     print('Running tracotometry...')
     segTractometry(
-        metric=path_mni_fa,
+        metric=path_mni_metric,
         tracking_dir=tracking_dir,
         end_dir=end_dir,
         out=op.join(output, 'Tractometry_FA.csv'),
