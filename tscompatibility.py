@@ -694,7 +694,10 @@ def runtractseg(input, output, template, metric='fa', docker=None):
         Path to subject output folder
     template : str
         Path to MNI template
-    metric : str, {fa, ad, rd, md, ak, rk, mk, kfa, 'mkt}, optional
+    metric : str, {dti_fa, dti_ad, dti_rd, dti_md, dki_ak,
+        dki_rk, dki_mk, dki_kfa, 'dki_mkt, fbi_zeta, fbi_faa,
+        fbi_awf, fbwm_afw, fbwm_da, fbwm_de_ax, fbwm_de_rad,
+        fbwm_de_mean, fbwm_fae}, optional
     docker : str
         Name of Docker container to run
         
@@ -710,11 +713,13 @@ def runtractseg(input, output, template, metric='fa', docker=None):
     if not op.isdir(output):
         os.makedirs(output, exist_ok=True)
     
-    if any(metric==x for x in ['fa', 'kfa']):
+    if any(metric==x for x in ['dti_fa', 'dki_kfa', 'fbi_zeta',
+        'fbi_awf', 'fbwm_awf', 'fbi_faa', 'fbwm_fae']):
         thr = [0, 1]
-    elif any(metric==x for x in ['ad', 'rd', 'md']):
+    elif any(metric==x for x in ['dti_ad', 'dti_rd', 'dti_md',
+        'fbwm_da', 'fbwm_de_ax', 'fbwm_de_rad', 'fbwm_de_mean']):
         thr = [0, 3]
-    elif any(metric==x for x in ['ak', 'rk', 'mk', 'mkt']):
+    elif any(metric==x for x in ['dki_ak', 'dki_rk', 'dki_mk', 'dki_mkt']):
         thr = [0, 2]
 
         
@@ -894,11 +899,13 @@ def runtractseg_(input, output, template, metric='fa', docker=None):
     if not op.isdir(output):
         os.makedirs(output, exist_ok=True)
     
-    if any(metric==x for x in ['fa', 'kfa']):
+    if any(metric==x for x in ['dti_fa', 'dki_kfa', 'fbi_zeta',
+        'fbi_awf', 'fbwm_awf', 'fbi_faa', 'fbwm_fae']):
         thr = [0, 1]
-    elif any(metric==x for x in ['ad', 'rd', 'md']):
+    elif any(metric==x for x in ['dti_ad', 'dti_rd', 'dti_md',
+        'fbwm_da', 'fbwm_de_ax', 'fbwm_de_rad', 'fbwm_de_mean']):
         thr = [0, 3]
-    elif any(metric==x for x in ['ak', 'rk', 'mk', 'mkt']):
+    elif any(metric==x for x in ['dki_ak', 'dki_rk', 'dki_mk', 'dki_mkt']):
         thr = [0, 2]
     path_metric = op.join(input, 'metrics', metric + '.nii')
     path_metric_nan = op.join(output, metric + '_NO_NAN.nii.gz')
