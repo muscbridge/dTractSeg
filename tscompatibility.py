@@ -682,7 +682,7 @@ def createAffineFA(dwi, bval, bvec, omat, template, mask=None, docker=None):
     os.remove(FA)
     os.remove(FA_)
     
-def runtractseg(input, output, template, metric='fa', docker=None):
+def runtractseg(input, output, template, metric='dti_fa', docker=None):
     """
     Executes the entire TractSeg pipeline from start to finish
     
@@ -722,7 +722,6 @@ def runtractseg(input, output, template, metric='fa', docker=None):
     elif any(metric==x for x in ['dki_ak', 'dki_rk', 'dki_mk', 'dki_mkt']):
         thr = [0, 2]
 
-        
     path_metric = op.join(input, 'metrics', metric + '.nii')
     path_metric_nan = op.join(output, metric + '_NO_NAN.nii.gz')
     path_metric_thr = op.join(output, metric + '_NO_NAN_THR.nii.gz')
